@@ -3,7 +3,6 @@ import asyncio
 import datetime
 from enum import StrEnum
 import logging
-from tkinter import W
 from homeassistant.core import HomeAssistant
 from dataclasses import dataclass
 from typing import cast
