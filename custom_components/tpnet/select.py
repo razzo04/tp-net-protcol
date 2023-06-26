@@ -2,6 +2,8 @@
 
 from datetime import timedelta
 import logging
+from select import select
+from typing import cast
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
@@ -22,7 +24,7 @@ SCAN_INTERVAL = timedelta(seconds=5)
 from homeassistant.core import callback
 
 from .tp_net import TpNet
-from .cordinator import MyCoordinator
+from .cordinator import TpNetCoordinator
 
 
 async def async_setup_entry(
@@ -33,14 +35,11 @@ async def async_setup_entry(
     """Add cover for passed config_entry in HA."""
     # The hub is loaded from the associated hass.data entry that was created in the
     # __init__.async_setup_entry function
-    tp_net = hass.data[DOMAIN][config_entry.entry_id]
-    # This will call Entity.set_sleep_timer(sleep_time=VALUE)
-    # Add all entities to HA
-    coordinator = MyCoordinator(hass, tp_net)
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]
 
-    await coordinator.async_refresh()
+    coordinator = cast(TpNetCoordinator, coordinator)
 
-    async_add_entities([MySelect(coordinator, tp_net)])
+    async_add_entities([MySelect(coordinator, coordinator.tp_net)])
 
 
 
@@ -51,6 +50,7 @@ class MySelect(CoordinatorEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         await self.tp_net.set(["PRESET",option])
+        await self.coordinator.async_request_refresh()
 
     @property
     def unique_id(self):
@@ -63,7 +63,7 @@ class MySelect(CoordinatorEntity, SelectEntity):
         return "Preset"
     
 
-    def __init__(self, coordinator, tp_net: TpNet):
+    def __init__(self, coordinator: TpNetCoordinator, tp_net: TpNet):
         self._attr_options = ["1","2","3","4","5"]
         self.tp_net = tp_net
         self._attr_current_option = None
@@ -73,6 +73,8 @@ class MySelect(CoordinatorEntity, SelectEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        if self.coordinator.data == None:
+            return
         self._attr_current_option = self.coordinator.data["PRESET"][0]
         self.async_write_ha_state()
 

@@ -1,6 +1,5 @@
 """The tp-net-ecler integration."""
 from __future__ import annotations
-import asyncio
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -10,6 +9,8 @@ from .tp_net import TpNet
 
 from .const import DOMAIN
 
+from .cordinator import TpNetCoordinator
+
 # TODO List the platforms that you want to support.
 # For your initial PR, limit it to 1 platform.
 PLATFORMS: list[Platform] = [ Platform.SWITCH, Platform.SELECT]
@@ -18,7 +19,12 @@ PLATFORMS: list[Platform] = [ Platform.SWITCH, Platform.SELECT]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up tp-net-ecler from a config entry."""
     tp_net = TpNet(hass, entry.data["host"])
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = tp_net
+    
+    coordinator = TpNetCoordinator(hass, tp_net)
+
+    await coordinator.async_refresh()
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

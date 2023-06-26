@@ -3,6 +3,7 @@ from ast import While
 import asyncio
 from datetime import timedelta
 import logging
+from typing import cast
 from homeassistant.components.switch import SwitchEntity
 
 from homeassistant.config_entries import ConfigEntry
@@ -26,7 +27,7 @@ SCAN_INTERVAL = timedelta(seconds=5)
 import voluptuous as vol
 
 from .tp_net import TpNet
-from .cordinator import MyCoordinator
+from .cordinator import TpNetCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,26 +41,13 @@ async def async_setup_entry(
     """Add cover for passed config_entry in HA."""
     # The hub is loaded from the associated hass.data entry that was created in the
     # __init__.async_setup_entry function
-    tp_net = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]
 
+    coordinator = cast(TpNetCoordinator, coordinator)
 
-    platform = entity_platform.async_get_current_platform()
-
-
-    # This will call Entity.set_sleep_timer(sleep_time=VALUE)
-
-
-    coordinator = MyCoordinator(hass, tp_net)
-
-    # await coordinator.async_config_entry_first_refresh()
-    await coordinator.async_refresh()
-    # Add all entities to HA
-    async_add_entities([MySwitch(coordinator, tp_net)])
-
-        
-
-
-class MySwitch(CoordinatorEntity, SwitchEntity):
+    async_add_entities([DevicePower(coordinator, coordinator.tp_net)])
+       
+class DevicePower(CoordinatorEntity, SwitchEntity):
     # Implement one of these methods.
     _attr_has_entity_name = True
     _attr_assumed_state = False
@@ -72,7 +60,8 @@ class MySwitch(CoordinatorEntity, SwitchEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        print(f"aviable: {self.available}")
+        if self.coordinator.data == None:
+            return
         self._attr_is_on = self.coordinator.data["POWER"][0] == "ON"
         self.async_write_ha_state()
 

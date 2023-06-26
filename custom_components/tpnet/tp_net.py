@@ -32,7 +32,6 @@ _LOGGER = logging.getLogger(__name__)
 
 
 MAX_TIMEOUT = datetime.timedelta(seconds=10)
-import async_timeout
 
 @dataclass
 class Message:
@@ -53,6 +52,11 @@ class Message:
 
 
 PORT = 5800
+def done_callback(future):
+    try:
+        result = future.result()
+    except Exception as exc:
+        _LOGGER.exception("exception during listening ", exc)
 
 class TpNet: 
     def __init__(self,hass: HomeAssistant, host: str) -> None:
@@ -71,17 +75,16 @@ class TpNet:
         self.data: dict[str, list[str]] = {}
 
     async def listen(self):
-        print("start to listen")
         while True:
             data = await self._connection.receive()
 
             data = cast(bytes, data)
-            _LOGGER.info(f"recived message {data}") 
+            _LOGGER.debug(f"recived message {data}") 
 
             for message_raw in data.decode("ASCII").split("\n"):
                 if not message_raw:
                     continue
-                _LOGGER.info(f"message to process {message_raw}") 
+                # _LOGGER.debug(f"message to process {message_raw}") 
                 message = Message.load(message_raw)
 
                 if message.type == TypeMessage.DATA:
@@ -94,7 +97,7 @@ class TpNet:
                 if message.type == TypeMessage.SYSTEM and message.paramsList[0] == "PING":
                     self.last_ping = datetime.datetime.now()
                     self.available = True
-                    _LOGGER.info("sending response to ping")
+                    _LOGGER.debug("sending response to ping")
 
                     await self.send(Message(TypeMessage.SYSTEM,["PONG"]))
 
@@ -102,7 +105,7 @@ class TpNet:
 
     async def check_ping_time(self):
         while True:
-            if self.last_ping == None or (datetime.datetime.now() - self.last_ping) > MAX_TIMEOUT:
+            if self.available and (self.last_ping == None or (datetime.datetime.now() - self.last_ping) > MAX_TIMEOUT):
                 self.available = False
                 _LOGGER.warning("not message from deveice")
             await asyncio.sleep(5)
@@ -122,19 +125,13 @@ class TpNet:
         if self.available:
            
             if self._check_ping_task:
-                print("cancel")
                 self._check_ping_task.cancel()
                 self._check_ping_task = None
             self._check_ping_task = asyncio.create_task(self.check_ping_time())
 
-        else:
-            _LOGGER.warning("Not available after connet")
-
-
         return self.available
 
     async def start_listening(self) -> bool:
-        print("start listen wrapper")
         try:
             self._connection = await open_remote_endpoint(self.host, PORT)
 
@@ -142,7 +139,7 @@ class TpNet:
             return False 
 
         self._listen_task = self._hass.async_create_background_task(self.listen(), name="Listen")
-
+        self._listen_task.add_done_callback(done_callback)
         return True
     
     async def get(self, params: list[str]) -> Message | None:
@@ -167,11 +164,10 @@ class TpNet:
             
             return message
 
-
         except TimeoutError as err:
             # Raising ConfigEntryAuthFailed will cancel future updates
             # and start a config flow with SOURCE_REAUTH (async_step_reauth)
-            _LOGGER.warning("get request timeout")
+            _LOGGER.debug(f"get request for {params} timeout")
             self._future_list[params[0]] = None
             
             return None
@@ -189,11 +185,6 @@ class TpNet:
         if not self.available:
             self._connection.send(Message(TypeMessage.SYSTEM,["CONNECT","PINGPONG"]).dump())
         self._connection.send(message.dump())
-
-        if self._listen_task:
-            print(f" done: {self._listen_task.done()}")
-            self._listen_task.print_stack()
-
 
     async def get_all(self):
         await self.send(Message(TypeMessage.GET, ["ALL"]))
