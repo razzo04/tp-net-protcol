@@ -111,9 +111,9 @@ class TpNet:
             await asyncio.sleep(5)
 
 
-    async def close(self):
+    def close(self):
         self._connection.abort()
-        
+
     async def connect(self) -> bool:
         """Test connectivity to the Dummy hub is OK."""        
         
@@ -135,6 +135,8 @@ class TpNet:
         return self.available
 
     async def start_listening(self) -> bool:
+        if not self._connection._closed:
+            self._connection.abort()
         try:
             self._connection = await open_remote_endpoint(self.host, PORT)
 
@@ -192,7 +194,8 @@ class TpNet:
     async def get_all(self):
         await self.send(Message(TypeMessage.GET, ["ALL"]))
 
-
+    def __del__(self):
+        self.close()
     
 
 
