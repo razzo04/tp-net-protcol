@@ -135,7 +135,7 @@ class TpNet:
         return self.available
 
     async def start_listening(self) -> bool:
-        if not self._connection._closed:
+        if self._connection and not self._connection._closed:
             self._connection.abort()
         try:
             self._connection = await open_remote_endpoint(self.host, PORT)
