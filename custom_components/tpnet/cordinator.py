@@ -35,6 +35,7 @@ class TpNetCoordinator(DataUpdateCoordinator):
         if not self.tp_net.available:
             resutl = await self.tp_net.connect()
             if not resutl:
+                await self.tp_net.close()
                 raise UpdateFailed("Device not aviable")
                 
         try:
@@ -43,8 +44,7 @@ class TpNetCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug(f"cached data {self.tp_net.data}")
                 return self.tp_net.data
         except Exception as err:
-            # Raising ConfigEntryAuthFailed will cancel future updates
-            # and start a config flow with SOURCE_REAUTH (async_step_reauth)
+            await self.tp_net.close()
             raise err
 
 

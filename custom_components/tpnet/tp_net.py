@@ -111,6 +111,9 @@ class TpNet:
             await asyncio.sleep(5)
 
 
+    async def close(self):
+        self._connection.abort()
+        
     async def connect(self) -> bool:
         """Test connectivity to the Dummy hub is OK."""        
         
